@@ -1,0 +1,5 @@
+node_modules/
+_raw/
+_build/
+artifact/
+.DS_Store

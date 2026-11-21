@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Marine Drive Explorer</title>
+<meta name="description" content="Walk and fly through South Mumbai - Marine Drive, Back Bay, Chowpatty and Malabar Hill - built entirely from code, with a live sunset.">
+<style>
+:root{--ink:#f6f1e7;--dim:#c9c1b3;--glass:rgba(18,20,26,.62);--line:rgba(255,255,255,.14);--amber:#ffb347;--amber2:#ff8a3d}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#0d0f14;color:var(--ink);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+[hidden]{display:none!important}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+.glass{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line)}
+/* loading */
+#loading{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:radial-gradient(120% 90% at 70% 100%,#5a2f24 0%,#1d1420 45%,#0d0f14 100%);z-index:30;transition:opacity .8s}
+#loading.done{opacity:0;pointer-events:none}
+#loading h1{margin:0;font-weight:600;font-size:clamp(26px,7vw,44px);letter-spacing:.02em}
+#loading p{margin:0;color:var(--dim)}
+.barw{width:min(320px,76vw);height:4px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
+#bar{height:100%;width:0;background:linear-gradient(90deg,var(--amber2),var(--amber));transition:width .3s}
+/* start card */
+#start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:25;background:rgba(10,10,14,.35)}
+#start .card{width:min(420px,calc(100vw - 32px));padding:22px 22px 18px;border-radius:18px}
+#start h2{margin:0 0 4px;font-size:24px}
+#start .sub{margin:0 0 14px;color:var(--dim)}
+#start ul{margin:0 0 18px;padding:0;list-style:none;display:grid;gap:8px}
+#start li{display:flex;gap:10px;align-items:baseline}
+#start li b{min-width:92px;color:var(--amber);font-weight:600}
+.big{width:100%;padding:14px;border-radius:12px;background:linear-gradient(180deg,#ffbf5e,#ff8f3d);color:#2a1406;font-weight:700;font-size:17px}
+/* hud */
+#top{position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));display:flex;gap:8px;align-items:center;z-index:10;pointer-events:none}
+#place{pointer-events:auto;padding:8px 12px;border-radius:999px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+#top .sp{flex:1}
+.pill{pointer-events:auto;padding:9px 14px;border-radius:999px;font-weight:600;min-height:40px}
+.pill.accent{background:linear-gradient(180deg,#ffbf5e,#ff8f3d);color:#2a1406;border:0}
+#bottom{position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));width:min(560px,calc(100vw - 24px));display:flex;align-items:center;gap:10px;padding:8px 12px 8px 8px;border-radius:16px;z-index:10}
+#play{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.08);display:grid;place-items:center;flex:none}
+#play svg{width:22px;height:22px}
+#play.on{background:linear-gradient(180deg,#ffbf5e,#ff8f3d);color:#2a1406}
+#time{flex:1;min-width:0;accent-color:var(--amber);height:28px}
+#clock{min-width:66px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+/* touch controls */
+#joy{position:fixed;left:max(18px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 76px);width:124px;height:124px;border-radius:50%;z-index:9;display:none;touch-action:none}
+#knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.touch #joy{display:block}
+#fly{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 84px);display:none;flex-direction:column;gap:10px;z-index:9}
+body[data-mode=fly] #fly{display:flex}
+#fly button{width:56px;height:56px;border-radius:14px;font-size:22px;font-weight:700}
+.hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(max(12px,env(safe-area-inset-bottom)) + 70px);padding:6px 12px;border-radius:999px;color:var(--dim);font-size:13px;z-index:8;white-space:nowrap}
+.touch .hint{display:none}
+/* places */
+#soundBtn{padding:9px 11px;display:grid;place-items:center}
+#soundBtn .w{opacity:.25}#soundBtn.on .w{opacity:1}
+#places{position:fixed;right:max(12px,env(safe-area-inset-right));top:calc(max(10px,env(safe-area-inset-top)) + 52px);width:min(320px,calc(100vw - 24px));max-height:calc(100vh - 170px);overflow:auto;border-radius:16px;padding:8px;z-index:20}
+#places .hd{display:flex;align-items:center;justify-content:space-between;padding:6px 8px 8px;color:var(--dim);font-size:13px}
+#places .close{background:none;padding:4px 8px;font-size:18px}
+#places .list{display:grid;gap:4px}
+#places .list button{text-align:left;padding:12px 12px;border-radius:10px;background:rgba(255,255,255,.06)}
+#places .list button:hover,#places .list button:focus-visible{background:rgba(255,179,71,.22);outline:none}
+#stats{position:fixed;left:12px;top:60px;font:12px ui-monospace,monospace;padding:6px 8px;border-radius:8px;z-index:11}
+#credit{position:fixed;right:8px;bottom:2px;font-size:10px;color:rgba(255,255,255,.5);z-index:5;pointer-events:none}
+@media (max-width:480px){ #bottom{bottom:max(10px,env(safe-area-inset-bottom))} #credit{display:none} #qBtn{display:none} }
+@media (max-height:460px){ #joy{bottom:84px;width:110px;height:110px} #fly{bottom:84px} }
+</style>
+</head>
+<body data-mode="walk">
+<canvas id="c" tabindex="0" aria-label="3D view of Marine Drive, Mumbai"></canvas>
+<div id="loading"><h1>Marine Drive</h1><p id="loadtxt">Starting…</p><div class="barw"><div id="bar"></div></div></div>
+<div id="start" hidden><div class="card glass">
+  <h2>Marine Drive, Mumbai</h2>
+  <p class="sub">South Mumbai built from real map data, all drawn by code. Watch the sun set over the Arabian Sea and the Queen's Necklace light up.</p>
+  <ul>
+    <li><b>Look</b><span>Drag on the screen</span></li>
+    <li><b>Move</b><span class="k">Joystick, or W A S D / arrow keys</span></li>
+    <li><b>Fly</b><span>Tap <i>Fly</i>, then ▲ ▼ to go up and down</span></li>
+    <li><b>Sunset</b><span>Press ▶ or slide the time bar</span></li>
+    <li><b>Places</b><span>Jump to Chowpatty, Nariman Point, Malabar Hill…</span></li>
+  </ul>
+  <button class="big" id="startBtn">Start exploring</button>
+</div></div>
+<div id="top">
+  <div id="place" class="glass">Marine Drive</div><div class="sp"></div>
+  <button class="pill glass icon" id="soundBtn" aria-label="Sound on"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="w" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></button>
+  <button class="pill glass" id="qBtn">Detail</button>
+  <button class="pill glass" id="modeBtn">Fly</button>
+  <button class="pill accent" id="placesBtn">Places</button>
+</div>
+<div id="places" class="glass" hidden><div class="hd"><span>Jump to a place</span><button class="close" aria-label="Close">✕</button></div><div class="list"></div></div>
+<div id="bottom" class="glass">
+  <button id="play" aria-label="Play the sunset"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="15" r="4.5"/><path d="M2 20h20v1.6H2zM11.2 3h1.6v4h-1.6zM3.6 8.1l1.1-1.1 2.8 2.8-1.1 1.1zM16.5 9.8l2.8-2.8 1.1 1.1-2.8 2.8z"/></svg></button>
+  <input id="time" type="range" min="5.5" max="21" step="0.01" value="17.6" aria-label="Time of day">
+  <span id="clock">5:36 pm</span>
+</div>
+<div id="joy" class="glass"><div id="knob"></div></div>
+<div id="fly"><button id="up" class="glass" aria-label="Fly up">▲</button><button id="down" class="glass" aria-label="Fly down">▼</button></div>
+<div class="hint glass">Drag to look · W A S D to move · F fly · 1-0 places · P sunset · M sound</div>
+<div id="stats" class="glass" hidden></div>
+<div id="credit">Map data © OpenStreetMap contributors</div>
+<script>if (matchMedia('(pointer: coarse)').matches) document.documentElement.classList.add('touch');</script>
+<script type="module">/*APP*/</script>
+</body>
+</html>

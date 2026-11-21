@@ -1,0 +1,1 @@
+{"name":"marine-drive-explorer","private":true,"type":"module","scripts":{"build":"node build.mjs","dev":"node build.mjs --dev"},"devDependencies":{"@turf/turf":"^7.1.0","earcut":"^3.0.0","esbuild":"^0.24.0","playwright-core":"^1.49.1","polygon-clipping":"^0.15.7","three":"^0.170.0"}}
