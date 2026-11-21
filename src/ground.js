@@ -47,6 +47,8 @@ vec3 grass(vec2 p, float lush){
 }
 void main(){
   vec2 p = vP.xz; float k = floor(vKind+.5);
+  // bare ground inside the beach area (between the mapped beach outline and the waterline) is sand too
+  if (k < .5 && texture2D(uField, (p - uFieldInfo.xy)/uFieldInfo.zw).g > .08 && vP.y < 2.4) k = 5.;
   vec3 N = normalize(vN);
   vec3 alb; float spec = .04, gloss = 20., ao = 1., lampPool = 0.;
   float dist = length(uCam - vP);
@@ -88,7 +90,7 @@ void main(){
     alb = mix(alb, vec3(.56,.46,.33), step(abs(f.x-.5), .055) * step(abs(f.y-.5), .3) * step(.4, h21(floor(q))));
   } else if (k < 5.5) {               // beach sand, wetter near the water
     float cd = coastD(p);
-    vec3 dry = vec3(.64,.59,.50), wet = vec3(.33,.30,.25);
+    vec3 dry = vec3(.53,.49,.42), wet = vec3(.30,.27,.23);
     float rip = vn(vec2(dot(p,vec2(.8,.6))*1.6, dot(p,vec2(-.6,.8))*.25));
     alb = mix(wet, dry, smoothstep(2., 26., cd + rip*3.));
     alb *= .92 + .14*fbm(p*.6) + fine*.06*rip;

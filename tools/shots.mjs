@@ -21,6 +21,7 @@ for (const p of poses) {
     if (p.place != null) MD.place(p.place);
     if (p.at) MD.goto(...p.at);
     if (p.t != null) MD.setTime(p.t);
+    if (p.hide) p.hide.forEach(n => MD.hide(n));
     if (p.yaw != null) MD.state.yaw = p.yaw * Math.PI / 180;
     if (p.pitch != null) MD.state.pitch = p.pitch * Math.PI / 180;
     if (p.hideUI) document.querySelectorAll('#top,#bottom,.hint,#joy,#fly,#credit').forEach(e => e.style.visibility = 'hidden');

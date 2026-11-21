@@ -1,6 +1,6 @@
 // Moving life: cars, black-and-yellow taxis, red BEST buses and scooters on the real roads; Western Railway locals; boats.
 import * as THREE from 'three';
-import { groundH, rng, coastDist, B } from './geo.js';
+import { groundH, surfaceH, rng, coastDist, B } from './geo.js';
 import { propMat, glowPoints } from './props.js';
 
 const C = (h) => new THREE.Color(h).convertSRGBToLinear();
@@ -239,7 +239,7 @@ export function buildTraffic(L, scene, roads, quality) {
       const items = list.filter(a => a[3] === kind); if (!items.length) continue;
       const im = new THREE.InstancedMesh(kinds[kind].geo, mat, items.length);
       const mm = new THREE.Matrix4(), qq = new THREE.Quaternion(), vv = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), upv = new THREE.Vector3(0, 1, 0);
-      items.forEach((a, i) => { qq.setFromAxisAngle(upv, a[2]); im.setMatrixAt(i, mm.compose(vv.set(a[0], groundH(a[0], a[1]) + 0.12, a[1]), qq, one)); im.setColorAt(i, C(kind === 0 ? cols[Math.floor(R() * cols.length)] : kinds[kind].colors[Math.floor(R() * kinds[kind].colors.length)])); });
+      items.forEach((a, i) => { qq.setFromAxisAngle(upv, a[2]); im.setMatrixAt(i, mm.compose(vv.set(a[0], surfaceH(a[0], a[1]) + 0.14, a[1]), qq, one)); im.setColorAt(i, C(kind === 0 ? cols[Math.floor(R() * cols.length)] : kinds[kind].colors[Math.floor(R() * kinds[kind].colors.length)])); });
       im.computeBoundingSphere(); im.userData.cast = true; im.userData.c = [cx / list.length, cz / list.length];
       grp.add(im); parkObjs.push(im);
     }
@@ -264,7 +264,8 @@ export function buildTraffic(L, scene, roads, quality) {
       const d2 = (o.x - cx) ** 2 + (o.z - cz) ** 2;
       if (d2 > 2400 * 2400) { gi += 2; continue; }
       const a = Math.atan2(o.dx * ln.dir, o.dz * ln.dir);
-      const y = groundH(o.x, o.z) + 0.12;
+      if (v.hx === undefined || Math.abs(o.x - v.hx) + Math.abs(o.z - v.hz) > 6) { v.hx = o.x; v.hz = o.z; v.hy = Math.max(groundH(o.x, o.z), 0.3) + 0.25; }
+      const y = v.hy;
       q.setFromAxisAngle(up, a);
       const M = meshes[v.kind], useNear = d2 < 250 * 250 + cam.position.y * cam.position.y;
       m4.compose(v3.set(o.x, y, o.z), q, s3);

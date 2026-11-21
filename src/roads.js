@@ -1,7 +1,12 @@
 // Road ribbons draped on the terrain: carriageways, footpaths + kerbs, flyovers on pillars.
 import * as THREE from 'three';
 import { COMMON, FINISH, mat } from './shade.js';
-import { groundH, coastDist } from './geo.js';
+import { groundH, coastDist, hillH, surfaceH } from './geo.js';
+// extra lift where the ground is steep, so the coarse terrain never pokes through a road
+function slopeLift(x, z) {
+  const sx = Math.abs(groundH(x + 3, z) - groundH(x - 3, z)) / 6, sz = Math.abs(groundH(x, z + 3) - groundH(x, z - 3)) / 6;
+  return Math.min(0.5, Math.max(sx, sz) * 0.6);
+}
 
 export const ROAD_W = [14, 0, 10, 8, 6.2, 4.2, 6, 2.2, 2.2];
 
@@ -14,7 +19,7 @@ export function roadWidth(r) {
 const VS = /* glsl */`
 attribute vec2 aUv; attribute vec4 aInfo;
 varying vec3 vP; varying vec2 vUv; varying vec4 vInfo; varying vec3 vN;
-void main(){ vP = position; vUv = aUv; vInfo = aInfo; vN = normal; gl_Position = projectionMatrix*viewMatrix*vec4(position,1.); }`;
+void main(){ vP = position; vUv = aUv; vInfo = aInfo; vN = normal.y < 0. ? -normal : normal; gl_Position = projectionMatrix*viewMatrix*vec4(position,1.); }`;
 
 // aInfo: x = half width, y = lanes, z = class, w = flags (1 oneway, 2 concrete, 4 zebra-at-ends, 8 bridge)  vUv: x across (m from centre), y along (m)
 const ROAD_FS = /* glsl */`
@@ -133,12 +138,27 @@ function ribbon(out, pts, hw, info, yfn, uOff = 0) {
     const w = hw / cosh;
     if (i > 0) along += Math.hypot(x - pts[i * 2 - 2], z - pts[i * 2 - 1]);
     const lx = x + nx * w, lz = z + nz * w, rx = x - nx * w, rz = z - nz * w;
-    out.pos.push(lx, yfn(lx, lz, along), lz, rx, yfn(rx, rz, along), rz);
+    out.pos.push(lx, yfn(lx, lz, along, x, z), lz, rx, yfn(rx, rz, along, x, z), rz);
     out.uv.push(-hw - uOff, along, hw + uOff, along);
     for (let k = 0; k < 2; k++) out.info.push(...info);
     if (i < n - 1) { const a = base + i * 2; out.idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
   }
   return along;
+}
+
+// a strip running alongside the centreline between two signed offsets (used for the two footpaths)
+function strip(out, pts, o0, o1, info, yfn) {
+  const n = pts.length / 2; if (n < 2) return;
+  const base = out.pos.length / 3; let along = 0;
+  for (let i = 0; i < n; i++) {
+    const x = pts[i * 2], z = pts[i * 2 + 1];
+    let tx = 0, tz = 0;
+    if (i < n - 1) { tx += pts[i * 2 + 2] - x; tz += pts[i * 2 + 3] - z; }
+    if (i > 0) { tx += x - pts[i * 2 - 2]; tz += z - pts[i * 2 - 1]; along += Math.hypot(x - pts[i * 2 - 2], z - pts[i * 2 - 1]); }
+    const l = Math.hypot(tx, tz) || 1, nx = -tz / l, nz = tx / l;
+    for (const o of [o1, o0]) { const vx = x + nx * o, vz = z + nz * o; out.pos.push(vx, yfn(vx, vz, along, x, z), vz); out.uv.push(-o, along); out.info.push(...info); }
+    if (i < n - 1) { const a = base + i * 2; out.idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  }
 }
 
 function densify(p, step) {
@@ -155,17 +175,29 @@ export function buildRoads(L, scene) {
   const grp = new THREE.Group();
   const R = { pos: [], uv: [], info: [], idx: [] }, W = { pos: [], uv: [], info: [], idx: [] }, P = { pos: [], uv: [], info: [], idx: [] }, F = { pos: [], uv: [], info: [], idx: [] };
   const lanes = [];  // for traffic: {pts, hw, oneway, cls, lanes}
+  // break polylines at sharp corners: a mitred join there folds into a spike
+  const pieces = [];
   for (const r of L.roads) {
-    if (r.cls > 8) continue;
+    const P = r.pts, n = P.length / 2; let start = 0;
+    for (let i = 1; i < n - 1; i++) {
+      const ax = P[i * 2] - P[i * 2 - 2], az = P[i * 2 + 1] - P[i * 2 - 1], bx = P[i * 2 + 2] - P[i * 2], bz = P[i * 2 + 3] - P[i * 2 + 1];
+      const c = (ax * bx + az * bz) / ((Math.hypot(ax, az) * Math.hypot(bx, bz)) || 1);
+      if (c < 0.5) { pieces.push({ ...r, pts: P.slice(start * 2, i * 2 + 2) }); start = i; }
+    }
+    pieces.push(start ? { ...r, pts: P.slice(start * 2) } : r);
+  }
+  for (const r of pieces) {
+    if (r.cls > 8 || r.pts.length < 4) continue;
     const hw = roadWidth(r) / 2;
-    const p = densify(r.pts, r.bridge ? 6 : 10);
+    const onHill = (() => { for (let i = 0; i < r.pts.length; i += 2) if (hillH(r.pts[i], r.pts[i + 1]) > 3) return true; return false; })();
+    const p = densify(r.pts, r.bridge ? 6 : onHill ? 4 : 10);
     const total = len(p);
     const isMarine = /Marine Drive|Netaji Subhash/i.test(r.name);
     const BR = r.bridge ? (r.cls >= 7 ? 6.8 : 7.0) : 0;
     const ramp = Math.min(60, total * 0.35);
-    const yfn = (x, z, a) => {
-      const g = Math.max(groundH(x, z), 0.3);
-      if (!BR) return g + (r.cls >= 6 ? 0.16 : 0.12);
+    const yfn = (x, z, a, cx = x, cz = z) => {
+      const g = surfaceH(x, z);
+      if (!BR) return g + (r.cls >= 6 ? 0.16 : 0.14) + slopeLift(cx, cz);
       // elevated deck: footbridges stay up (stairs at ends), road flyovers ramp down
       const t = r.cls >= 7 ? 1 : Math.min(1, Math.min(a, total - a) / ramp);
       return g + 0.12 + BR * (t * t * (3 - 2 * t));
@@ -176,7 +208,10 @@ export function buildRoads(L, scene) {
     // footpaths along streets (not on flyovers, not on service lanes)
     if (r.cls <= 4 && !BR) {
       const sw = r.cls <= 2 ? 3.2 : 2.2;
-      ribbon(W, p, hw + sw, [hw + sw, hw, r.cls <= 3 ? 1 : 0, 0], (x, z) => Math.max(groundH(x, z), 0.3) + 0.1);
+      const fy = (x, z, a, cx, cz) => surfaceH(x, z) + 0.07 + slopeLift(cx, cz);
+      const info = [hw + sw, hw, r.cls <= 3 ? 1 : 0, 0];
+      strip(W, p, hw - 0.15, hw + sw, info, fy);
+      strip(W, p, -(hw + sw), -(hw - 0.15), info, fy);
     }
     if (BR) { // pillars and parapets for flyovers / foot bridges
       let a = 0;
@@ -201,7 +236,7 @@ export function buildRoads(L, scene) {
     g.setAttribute('aUv', new THREE.Float32BufferAttribute(D.uv, 2));
     g.setAttribute('aInfo', new THREE.Float32BufferAttribute(D.info, 4));
     g.setIndex(D.idx); g.computeVertexNormals();
-    const m = mat({ vs: VS, fs, po, uniforms: { uLenFade: { value: 0 } } });
+    const m = mat({ vs: VS, fs, po, side: THREE.DoubleSide, uniforms: { uLenFade: { value: 0 } } });
     const mesh = new THREE.Mesh(g, m); mesh.name = name; mesh.userData.receive = true;
     grp.add(mesh); return mesh;
   };

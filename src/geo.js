@@ -35,8 +35,8 @@ export function initGeo(L) {
   }
   field = sdf(landRaw, GW, GH);
   // beach mask: beach polygons grown a little seaward, blurred
-  g.fillStyle = '#000'; g.fillRect(0, 0, GW, GH); g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineWidth = 6; g.filter = 'blur(2px)';
-  for (const a of L.areas) if (a.k === 5) { const r = a.pts; g.beginPath(); for (let i = 0; i < r.length; i += 2) g.lineTo((r[i] - GX0) / CELL, (r[i + 1] - GZ0) / CELL); g.closePath(); g.fill(); g.stroke(); }
+  g.fillStyle = '#000'; g.fillRect(0, 0, GW, GH); g.fillStyle = '#fff'; g.filter = 'blur(1px)';
+  for (const a of L.areas) if (a.k === 5) { const r = a.pts; g.beginPath(); for (let i = 0; i < r.length; i += 2) g.lineTo((r[i] - GX0) / CELL, (r[i + 1] - GZ0) / CELL); g.closePath(); g.fill(); }
   const bi = g.getImageData(0, 0, GW, GH).data; beach = new Float32Array(GW * GH);
   for (let k = 0; k < GW * GH; k++) beach[k] = bi[k * 4] / 255;
   for (let k = 0; k < field.length; k++) field[k] *= CELL;
@@ -101,7 +101,7 @@ export function hillH(x, z) {
     const a = RIDGE[i], b = RIDGE[i + 1];
     const [d, t] = segDist(x, z, a[0], a[1], b[0], b[1]);
     const h = a[2] + (b[2] - a[2]) * t;
-    const w = 300 + 80 * Math.sin(i * 1.7);
+    const w = 235 + 60 * Math.sin(i * 1.7);
     const v = h * Math.exp(-(d * d) / (w * w));
     if (v > best) best = v;
   }
@@ -168,3 +168,12 @@ export function triUp(idx, pos, a, b, c) {
   const ax = pos[a * 3], az = pos[a * 3 + 2], bx = pos[b * 3], bz = pos[b * 3 + 2], cx = pos[c * 3], cz = pos[c * 3 + 2];
   if ((bz - az) * (cx - ax) - (bx - ax) * (cz - az) >= 0) idx.push(a, b, c); else idx.push(a, c, b);
 }
+
+// height of the drawn land mesh (16 m grid split along the b-d diagonal, same as ground.js), so things laid on top never sink into it
+export function landMeshH(x, z) {
+  const S = 16, i = Math.floor((x - B.x0) / S), j = Math.floor((z - B.z0) / S);
+  const x0 = B.x0 + i * S, z0 = B.z0 + j * S, fx = (x - x0) / S, fz = (z - z0) / S;
+  const ha = groundH(x0, z0), hb = groundH(x0 + S, z0), hc = groundH(x0 + S, z0 + S), hd = groundH(x0, z0 + S);
+  return fx + fz <= 1 ? ha + (hb - ha) * fx + (hd - ha) * fz : hc + (hd - hc) * (1 - fx) + (hb - hc) * (1 - fz);
+}
+export const surfaceH = (x, z) => Math.max(groundH(x, z), landMeshH(x, z), 0.3);

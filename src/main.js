@@ -348,7 +348,7 @@ function tick() {
   tick();
   // test hooks
   window.MD = {
-    W, U, state, camera, renderer, geo: { coastDist, beachAt, groundH, insideBuilding },
+    W, U, state, camera, renderer, hide: (n) => { scene.getObjectByName(n).visible = false; }, geo: { coastDist, beachAt, groundH, insideBuilding },
     goto: (x, y, z, yawDeg = 0, pitchDeg = 0, mode = 'fly') => { goto({ name: '', x, y, z, yaw: yawDeg * Math.PI / 180, pitch: pitchDeg * Math.PI / 180, mode }); },
     place: (i) => { const p = PLACES[i]; goto(resolvePlace(p)); if (p.time) setTime(p.time); },
     profile: () => {
